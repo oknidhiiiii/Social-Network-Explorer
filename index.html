@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Network Explorer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🌐 Social Explorer</h2>
+            </div>
+            
+            <div class="control-group">
+                <h3>Manage Users (Max 10)</h3>
+                <div class="input-row">
+                    <input type="text" id="usernameInput" placeholder="Enter username" maxlength="12">
+                    <button id="addUserBtn" class="btn primary">Add</button>
+                    <button id="delUserBtn" class="btn danger">Del</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Manage Connections</h3>
+                <div class="input-row">
+                    <select id="user1Select"><option value="">User 1</option></select>
+                    <select id="user2Select"><option value="">User 2</option></select>
+                </div>
+                <div class="btn-grid mt-2">
+                    <button id="addConnBtn" class="btn primary">Connect</button>
+                    <button id="delConnBtn" class="btn danger">Disconnect</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Algorithms & Traversal</h3>
+                <div class="input-row">
+                    <select id="startNodeSelect"><option value="">Start Node</option></select>
+                </div>
+                <div class="btn-grid mt-2">
+                    <button id="dfsBtn" class="btn secondary">Run DFS</button>
+                    <button id="bfsBtn" class="btn secondary">Run BFS</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Smart Social Features</h3>
+                <div class="btn-grid">
+                    <button id="influencerBtn" class="btn action">Influence Leader</button>
+                    <button id="isolatedBtn" class="btn action">Find Isolated</button>
+                    <button id="mutualBtn" class="btn action">Mutual Friends</button>
+                    <button id="shortestPathBtn" class="btn action">Shortest Path</button>
+                </div>
+            </div>
+
+            <div class="control-group mt-auto">
+                <button id="resetBtn" class="btn danger w-100">Reset Graph</button>
+                <button id="sampleDataBtn" class="btn outline w-100 mt-2">Load Sample Data</button>
+            </div>
+        </aside>
+
+        <!-- Main Visualization Area -->
+        <main class="main-content">
+            <div class="graph-header">
+                <h3>Network Graph Visualization</h3>
+                <div class="graph-legend">
+                    <span class="legend-item"><span class="color-box unvisited"></span> Unvisited Nodes</span>
+                    <span class="legend-item"><span class="color-box visited"></span> Traversed</span>
+                    <span class="legend-item"><span class="color-box current"></span> Active Step</span>
+                </div>
+            </div>
+            <div class="visualization-area" id="graphContainer">
+                <svg id="edgesSvg" width="100%" height="100%"></svg>
+                <div id="nodesContainer"></div>
+            </div>
+        </main>
+
+        <!-- Output / Data Panel -->
+        <aside class="right-panel">
+            <div class="panel-section h-half">
+                <h3>Execution Output</h3>
+                <div id="outputLog" class="log-container">
+                    <p class="log-message info">System Initialized. Awaiting user input...</p>
+                </div>
+            </div>
+            <div class="panel-section h-half">
+                <h3>Backend Data Structures</h3>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="adjList">Adjacency List</button>
+                    <button class="tab-btn" data-tab="adjMatrix">Adj Matrix</button>
+                </div>
+                <div id="adjList" class="data-view active">{}</div>
+                <div id="adjMatrix" class="data-view">[]</div>
+            </div>
+        </aside>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
