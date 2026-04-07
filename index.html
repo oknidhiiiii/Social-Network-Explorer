@@ -30,6 +30,9 @@
                     <select id="user1Select"><option value="">User 1</option></select>
                     <select id="user2Select"><option value="">User 2</option></select>
                 </div>
+                <div class="input-row mt-2">
+                    <input type="number" id="edgeWeightInput" placeholder="Weight (Optional)" min="1" max="100">
+                </div>
                 <div class="btn-grid mt-2">
                     <button id="addConnBtn" class="btn primary">Connect</button>
                     <button id="delConnBtn" class="btn danger">Disconnect</button>
@@ -54,6 +57,22 @@
                     <button id="isolatedBtn" class="btn action">Find Isolated</button>
                     <button id="mutualBtn" class="btn action">Mutual Friends</button>
                     <button id="shortestPathBtn" class="btn action">Shortest Path</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Advanced Weighted Network Analysis</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 10px; line-height: 1.3;">
+                    Weighted Mode uses simulated interaction strength between users.<br>This allows advanced algorithms like Kruskal and Prim to analyze the network structure.
+                </p>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; color: var(--text-main);">
+                        <input type="checkbox" id="weightedModeToggle"> Enable Weighted Mode
+                    </label>
+                </div>
+                <div class="btn-grid">
+                    <button id="kruskalBtn" class="btn outline" style="border-color: #10b981; color: #10b981;">Run Kruskal</button>
+                    <button id="primBtn" class="btn outline" style="border-color: #3b82f6; color: #3b82f6;">Run Prim</button>
                 </div>
             </div>
 
