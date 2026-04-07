@@ -107,6 +107,11 @@ const ui = {
     adjListDiv: document.getElementById('adjList'),
     adjMatrixDiv: document.getElementById('adjMatrix'),
     tabs: document.querySelectorAll('.tab-btn'),
+    edgeWeightInput: document.getElementById('edgeWeightInput'),
+    // Advanced Weighted UI
+    weightedModeToggle: document.getElementById('weightedModeToggle'),
+    kruskalBtn: document.getElementById('kruskalBtn'),
+    primBtn: document.getElementById('primBtn'),
     // Action Buttons
     addUserBtn: document.getElementById('addUserBtn'),
     delUserBtn: document.getElementById('delUserBtn'),
@@ -125,7 +130,9 @@ const ui = {
 const state = {
     graph: new Graph(),
     positions: new Map(), // Maps node -> {x, y} coordinates
-    isAnimating: false    // Prevents breaking animations mid-way
+    isAnimating: false,   // Prevents breaking animations mid-way
+    isWeightedMode: false,
+    weightedEdges: []     // Edge list for Kruskal {from, to, weight}
 };
 
 const radiusConfig = {
@@ -158,14 +165,34 @@ function updateSelects() {
 function updateBackendView() {
     let listStr = "{\n";
     for (let [node, neighbors] of state.graph.adjList.entries()) {
-        listStr += `  "${node}": [${neighbors.map(n => `"${n}"`).join(', ')}]\n`;
+        if (state.isWeightedMode) {
+            let nWithW = neighbors.map(n => {
+                let wEdge = state.weightedEdges.find(e => (e.from === node && e.to === n) || (e.from === n && e.to === node));
+                return `"${n}": ${wEdge ? wEdge.weight : 1}`;
+            });
+            listStr += `  "${node}": {${nWithW.join(', ')}}\n`;
+        } else {
+            listStr += `  "${node}": [${neighbors.map(n => `"${n}"`).join(', ')}]\n`;
+        }
     }
     listStr += "}";
     ui.adjListDiv.textContent = listStr;
 
     let matStr = "[\n";
-    for (let row of state.graph.adjMatrix) {
-        matStr += `  [${row.join(',  ')}]\n`;
+    for (let i = 0; i < state.graph.nodes.length; i++) {
+        let rowStr = [];
+        for (let j = 0; j < state.graph.nodes.length; j++) {
+            let val = state.graph.adjMatrix[i][j];
+            if (state.isWeightedMode && val === 1) {
+                let n1 = state.graph.nodes[i];
+                let n2 = state.graph.nodes[j];
+                let wEdge = state.weightedEdges.find(e => (e.from === n1 && e.to === n2) || (e.from === n2 && e.to === n1));
+                rowStr.push((wEdge ? wEdge.weight : 1).toString().padStart(3, ' '));
+            } else {
+                rowStr.push(val.toString().padStart(3, ' '));
+            }
+        }
+        matStr += `  [${rowStr.join(', ')}]\n`;
     }
     matStr += "]";
     ui.adjMatrixDiv.textContent = matStr;
@@ -203,6 +230,7 @@ function renderGraph() {
     ui.edgesSvg.innerHTML = '';
     const drawnEdges = new Set();
     
+    // First Pass: Draw all lines so they sit underneath the text
     for (let [node, neighbors] of state.graph.adjList.entries()) {
         const pos1 = state.positions.get(node);
         for (let neighbor of neighbors) {
@@ -224,6 +252,49 @@ function renderGraph() {
                 line.setAttribute("id", edgeId1);
                 ui.edgesSvg.appendChild(line);
                 drawnEdges.add(edgeId1);
+            }
+        }
+    }
+
+    // Second Pass: Draw Weights (guarantees they are layered on top and bypassing CSS cache)
+    if (state.isWeightedMode) {
+        const drawnTexts = new Set();
+        for (let [node, neighbors] of state.graph.adjList.entries()) {
+            const pos1 = state.positions.get(node);
+            for (let neighbor of neighbors) {
+                const sNode = sanitizeId(node);
+                const sNeighbor = sanitizeId(neighbor);
+                const textId1 = `text-${sNode}-${sNeighbor}`;
+                const textId2 = `text-${sNeighbor}-${sNode}`;
+                
+                if (!drawnTexts.has(textId1) && !drawnTexts.has(textId2)) {
+                    drawnTexts.add(textId1);
+                    const pos2 = state.positions.get(neighbor);
+                    
+                    let wEdge = state.weightedEdges.find(e => 
+                        (e.from === node && e.to === neighbor) || 
+                        (e.from === neighbor && e.to === node)
+                    );
+                    
+                    if (!wEdge) {
+                        wEdge = { from: node, to: neighbor, weight: Math.floor(Math.random() * 10) + 1 };
+                        state.weightedEdges.push(wEdge);
+                    }
+                    
+                    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    text.setAttribute("x", (pos1.x + pos2.x) / 2);
+                    text.setAttribute("y", (pos1.y + pos2.y) / 2 - 5);
+                    text.setAttribute("class", "edge-weight");
+                    text.setAttribute("text-anchor", "middle");
+                    // Force inline styles perfectly in case browser cached the old CSS file
+                    text.style.fill = "#ffffff";
+                    text.style.fontSize = "14px";
+                    text.style.fontWeight = "bold";
+                    text.style.textShadow = "0px 0px 5px rgba(0,0,0,1), 0px 0px 8px rgba(0,0,0,0.8)";
+                    text.style.pointerEvents = "none";
+                    text.textContent = wEdge.weight;
+                    ui.edgesSvg.appendChild(text);
+                }
             }
         }
     }
@@ -255,7 +326,7 @@ function delay(ms) {
 
 async function resetHighlights() {
     document.querySelectorAll('.graph-node').forEach(el => el.classList.remove('visited', 'current'));
-    document.querySelectorAll('.graph-edge').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.graph-edge').forEach(el => el.classList.remove('active', 'kruskal', 'prim'));
     await delay(200);
 }
 
@@ -524,14 +595,46 @@ ui.delUserBtn.addEventListener('click', () => {
 ui.addConnBtn.addEventListener('click', () => {
     const u1 = ui.user1Select.value;
     const u2 = ui.user2Select.value;
+    const wVal = parseInt(ui.edgeWeightInput.value);
+    
     if (!u1 || !u2) return log('Select two users to connect.', 'error');
     if (u1 === u2) return log('A user cannot connect to themselves.', 'error');
     
-    if (state.graph.addEdge(u1, u2)) {
+    const isNew = state.graph.addEdge(u1, u2);
+    
+    if (isNew) {
+        if (!isNaN(wVal)) {
+            state.weightedEdges.push({ from: u1, to: u2, weight: wVal });
+            if (!state.isWeightedMode) {
+                state.isWeightedMode = true;
+                ui.weightedModeToggle.checked = true;
+                generateWeights();
+            }
+        } else if (state.isWeightedMode) {
+            state.weightedEdges.push({ from: u1, to: u2, weight: Math.floor(Math.random() * 10) + 1 });
+        }
         renderGraph();
-        log(`Connection created: <b>${u1} ↔ ${u2}</b>`, 'success');
+        log(`Connection created: <b>${u1} ↔ ${u2}</b> ${!isNaN(wVal) ? `(Weight: ${wVal})` : ''}`, 'success');
+        ui.edgeWeightInput.value = '';
     } else {
-        log(`Connection already exists.`, 'warning');
+        if (!isNaN(wVal)) {
+            let existingW = state.weightedEdges.find(e => (e.from === u1 && e.to === u2) || (e.from === u2 && e.to === u1));
+            if (existingW) {
+                existingW.weight = wVal;
+            } else {
+                state.weightedEdges.push({ from: u1, to: u2, weight: wVal });
+            }
+            if (!state.isWeightedMode) {
+                state.isWeightedMode = true;
+                ui.weightedModeToggle.checked = true;
+                generateWeights();
+            }
+            renderGraph();
+            log(`Weight updated: <b>${u1} ↔ ${u2}</b> to ${wVal}`, 'success');
+            ui.edgeWeightInput.value = '';
+        } else {
+            log(`Connection already exists.`, 'warning');
+        }
     }
 });
 
@@ -568,6 +671,7 @@ ui.resetBtn.addEventListener('click', () => {
 ui.sampleDataBtn.addEventListener('click', () => {
     if (state.isAnimating) return log('Please wait for animation to finish.', 'warning');
     state.graph = new Graph();
+    state.weightedEdges = [];
     const mockUsers = ['travel_vibe', 'photo_guy', 'foodie_q', 'fit_life99', 'artby_sam', 'tech_guru', 'daily_meme'];
     mockUsers.forEach(u => state.graph.addNode(u));
     
@@ -598,4 +702,138 @@ ui.tabs.forEach(tab => {
 // Handle window resize dynamically to correct paths
 window.addEventListener('resize', () => {
     if (state.graph.nodes.length > 0) renderGraph();
+});
+
+// --- ADVANCED WEIGHTED ALGORITHMS ---
+
+function generateWeights() {
+    const existingEdges = [...state.weightedEdges];
+    state.weightedEdges = [];
+    const seen = new Set();
+    
+    for (let [node, neighbors] of state.graph.adjList.entries()) {
+        for (let neighbor of neighbors) {
+            const edgeId1 = `${node}-${neighbor}`;
+            const edgeId2 = `${neighbor}-${node}`;
+            if (!seen.has(edgeId1) && !seen.has(edgeId2)) {
+                seen.add(edgeId1);
+                
+                const existing = existingEdges.find(e => (e.from === node && e.to === neighbor) || (e.from === neighbor && e.to === node));
+                if (existing) {
+                    state.weightedEdges.push(existing);
+                } else {
+                    state.weightedEdges.push({ 
+                        from: node, 
+                        to: neighbor, 
+                        weight: Math.floor(Math.random() * 10) + 1 
+                    });
+                }
+            }
+        }
+    }
+}
+
+ui.weightedModeToggle.addEventListener('change', (e) => {
+    state.isWeightedMode = e.target.checked;
+    if (state.isWeightedMode) {
+        generateWeights(); // generate simulated strengths
+        log('<b>Weighted Mode Enabled:</b> Edges now have interaction strength.', 'info');
+    } else {
+        log('<b>Weighted Mode Disabled.</b> Graph operates implicitly equally weighted.', 'info');
+    }
+    renderGraph();
+});
+
+class UnionFind {
+    constructor(nodes) {
+        this.parent = {};
+        nodes.forEach(n => this.parent[n] = n);
+    }
+    find(i) {
+        if (this.parent[i] === i) return i;
+        return this.parent[i] = this.find(this.parent[i]);
+    }
+    union(i, j) {
+        let rootI = this.find(i);
+        let rootJ = this.find(j);
+        if (rootI !== rootJ) {
+            this.parent[rootI] = rootJ;
+            return true;
+        }
+        return false;
+    }
+}
+
+ui.kruskalBtn.addEventListener('click', async () => {
+    if (!state.isWeightedMode) return log('❌ Enable Weighted Mode first to run Kruskal.', 'error');
+    if (state.graph.nodes.length === 0) return log('Graph is empty.', 'error');
+    if (state.isAnimating) return;
+    
+    state.isAnimating = true;
+    await resetHighlights();
+    log(`Starting <b>Kruskal\'s MST</b>...`, 'info');
+    
+    let edges = [...state.weightedEdges].sort((a, b) => a.weight - b.weight);
+    let uf = new UnionFind(state.graph.nodes);
+    
+    let totalCost = 0;
+    for (let edge of edges) {
+        if (uf.union(edge.from, edge.to)) {
+            totalCost += edge.weight;
+            const edgeEl = getEdgeElement(edge.from, edge.to);
+            if (edgeEl) edgeEl.classList.add('kruskal');
+            
+            log(`Added line: <b>${edge.from} ↔ ${edge.to}</b> (Weight: ${edge.weight})`, 'success');
+            await delay(600);
+        }
+    }
+    log(`🌲 <b>Kruskal MST Complete!</b> Total Cost: ${totalCost}`, 'success');
+    state.isAnimating = false;
+});
+
+ui.primBtn.addEventListener('click', async () => {
+    if (!state.isWeightedMode) return log('❌ Enable Weighted Mode first to run Prim.', 'error');
+    if (state.graph.nodes.length === 0) return log('Graph is empty.', 'error');
+    if (state.isAnimating) return;
+    
+    let startNode = ui.startNodeSelect.value || state.graph.nodes[0];
+    state.isAnimating = true;
+    await resetHighlights();
+    log(`Starting <b>Prim\'s MST</b> from node <b>${startNode}</b>...`, 'info');
+    
+    let visited = new Set([startNode]);
+    let totalCost = 0;
+    
+    const nodeEl = getNodeElement(startNode);
+    if(nodeEl) nodeEl.classList.add('visited');
+    
+    while (visited.size < state.graph.nodes.length) {
+        let minEdge = null;
+        for (let edge of state.weightedEdges) {
+            let hasFrom = visited.has(edge.from);
+            let hasTo = visited.has(edge.to);
+            if (hasFrom !== hasTo) {
+                if (!minEdge || edge.weight < minEdge.weight) {
+                    minEdge = edge;
+                }
+            }
+        }
+        
+        if (!minEdge) break; // Graph disconnected handling
+        
+        let newNode = visited.has(minEdge.from) ? minEdge.to : minEdge.from;
+        visited.add(newNode);
+        totalCost += minEdge.weight;
+        
+        const edgeEl = getEdgeElement(minEdge.from, minEdge.to);
+        if (edgeEl) edgeEl.classList.add('prim');
+        
+        const nEl = getNodeElement(newNode);
+        if (nEl) nEl.classList.add('visited');
+        
+        log(`Added line: <b>${minEdge.from} ↔ ${minEdge.to}</b> (Weight: ${minEdge.weight})`, 'success');
+        await delay(600);
+    }
+    log(`🌲 <b>Prim MST Complete!</b> Total Cost: ${totalCost}`, 'success');
+    state.isAnimating = false;
 });
